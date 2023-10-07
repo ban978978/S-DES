@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>S-DES Encryption & Decryption</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            padding-top: 10px;
+        }
+
+        h1 {
+            font-size: 36px;
+            color: #007BFF;
+            padding: 0px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .form-container {
+            max-width: 500px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        label {
+            width: 20%;
+            text-align: right;
+            margin-right: 10px;
+            color: #007BFF;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        input[type="text"], select, textarea {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .buttons-container {
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            margin-bottom: 24px;
+            margin-left: 25px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+    </style>
+
+</head>
+
+<script>
+   // 声明 S 盒数据
+   const data1 = {
+        '00': ['01', '11', '00', '11'],
+        '01': ['00', '10', '10', '01'],
+        '10': ['11', '01', '01', '00'],
+        '11': ['10', '00', '11', '10']
+    };
+    const data2 = {
+        '00': ['00', '10', '11', '10'],
+        '01': ['01', '11', '00', '01'],
+        '10': ['10', '01', '01', '00'],
+        '11': ['11', '00', '10', '11']
+    };
+    // 进行加解密的函数
+    function encrypt_decrypt(subplaintext, key, flag) {
+        // step1: 切割成左右两个小分组
+        let left = subplaintext.slice(0, 4);
+        let right = subplaintext.slice(4);
+
+        // step2: 对右小组做4-8bit的拓展置换
+        const EPBox = [3, 0, 1, 2, 1, 2, 3, 0]; // 注意 JavaScript 的数组下标从 0 开始[41232341]
+        let tmpRight = "";
+        EPBox.forEach(index => {
+            tmpRight += right[index];
+        });
+        
+        // step3: 用轮密钥与右分组做异或处理
+        let tmpText = "";
+        for (let i = 0; i < tmpRight.length; i++) {
+            tmpText += tmpRight[i] !== key[i] ? '1' : '0';
+        }
+        
+        // step4: 压缩替换 8-4bit
+        const subsValue = 
+            data1[tmpText[1] + tmpText[2]][parseInt(tmpText[0] + tmpText[3], 2)] + 
+            data2[tmpText[5] + tmpText[6]][parseInt(tmpText[4] + tmpText[7], 2)];
+
+        // step5: 直接替换
+        const SPBox = [1, 3, 2, 0];//[2431]
+        let tmp = "";
+        SPBox.forEach(index => {
+            tmp += subsValue[index];
+        });
+
+        // step6: 替换后的4-bit与left做异或处理得到加密后的左分组
+        let enLeft = "";
+        for (let i = 0; i < left.length; i++) {
+            enLeft += tmp[i] !== left[i] ? '1' : '0';
+        }
+        
+        // step7: 判断是否需要左右互换,最后输出
+        return flag === 0 ? right + enLeft : enLeft + right;
+    }
+
+    // 定义一个左移函数
+    function leftShift(lst, n) {
+        // 从n位置开始截取lst到末尾的部分，并将lst从开始到n位置的部分拼接到后面
+        return lst.slice(n).concat(lst.slice(0, n));
+    }
+    //获取key1、key2
+    function get_keys(key) {
+            // 检查密钥长度是否为10位
+            if (key.length !== 10) {
+                alert("请提供一个10位的密钥!");  // 如果不是，弹出警告消息
+                return;
+            }
+            // 定义P10置换表
+            var P10 = [3, 5, 2, 7, 4, 10, 1, 9, 8, 6];
+            var permuted_key = [];  // 初始化置换后的密钥数组           
+            // 根据P10置换表置换key
+            for (var i = 0; i < P10.length; i++) {
+                permuted_key[i] = key[P10[i] - 1];
+            }
+            // 将置换后的密钥分割为左右两部分
+            var left_half = permuted_key.slice(0, 5);
+            var right_half = permuted_key.slice(5);
+            // 对左右两部分进行左移操作
+            left_half = leftShift(left_half, 1);
+            right_half = leftShift(right_half, 1);           
+            // 将左移后的两部分合并
+            var merged_key = left_half.concat(right_half);
+            // 定义P8置换表
+            var P8 = [6, 3, 7, 4, 8, 5, 10, 9];
+            // 根据P8置换表从merged_key中生成key1
+            var key1 = P8.map(function(index) {
+                return merged_key[index - 1];
+            }).join('');
+            // 对合并后的密钥的左右部分再次进行左移操作
+            left_half = leftShift(left_half, 1);
+            right_half = leftShift(right_half, 1);
+            merged_key = left_half.concat(right_half);           
+            // 根据P8置换表从merged_key中生成key2
+            var key2 = P8.map(function(index) {
+                return merged_key[index - 1];
+            }).join('');
+            // 返回key1和key2
+            return {
+                key1: key1,
+                key2: key2
+            };
+        }
+
+    function IP(subplaintext) {   
+        var IP_box = [2, 6, 3, 1, 4, 8, 5, 7];// 定义初始置换盒
+        var textArray = subplaintext.split('');// 将输入的二进制字符串转换为字符数组   
+        var tmpText = [];// 初始化一个空数组来存储置换后的字符
+        // 根据置换盒的规则，将原始数组中的字符按新的顺序添加到tmpText中
+        for (var i = 0; i < IP_box.length; i++) {
+            tmpText.push(textArray[IP_box[i] - 1]);  // 注意:因为索引从0开始，所以需要减1
+        }
+        var resText = tmpText.join('');// 将置换后的字符数组转换回字符串
+        return resText;// 返回置换后的字符串
+    }
+
+    function controyIP(subplaintext) {   
+        var IP_box = [4, 1, 3, 5, 7, 2, 8, 6];// 定义最终置换盒
+        var textArray = subplaintext.split('');// 将输入的二进制字符串转换为字符数组   
+        var tmpText = [];// 初始化一个空数组来存储置换后的字符
+        // 根据置换盒的规则，将原始数组中的字符按新的顺序添加到tmpText中
+        for (var i = 0; i < IP_box.length; i++) {
+            tmpText.push(textArray[IP_box[i] - 1]);  // 注意:因为索引从0开始，所以需要减1
+        }
+        var resText = tmpText.join('');// 将置换后的字符数组转换回字符串
+        return resText;// 返回置换后的字符串
+    }
+
+    function encryptORdecryptMessage(form,message,key,flag) {
+        var keys = get_keys(key);
+        var key1 = keys.key1;
+        var key2 = keys.key2;
+        var plaintext = plainTextTransfer(message, form);
+        let pt_lst = split(plaintext);
+        // 初始化结果数组
+        let res = [];
+        for (let i = 0; i < pt_lst.length; i++) {
+            // 调用IP函数对分组进行处理
+            pt_lst[i] = IP(pt_lst[i]);
+            // 调用func_encrypt函数进行加密操作
+            if (flag === 0) {
+                pt_lst[i] = encrypt_decrypt(pt_lst[i], key1, 0);
+                pt_lst[i] = encrypt_decrypt(pt_lst[i], key2, 1);
+            }else if (flag === 1){
+                pt_lst[i] = encrypt_decrypt(pt_lst[i], key2, 0);
+                pt_lst[i] = encrypt_decrypt(pt_lst[i], key1, 1);
+            }
+            // 调用FP函数处理加密后的分组
+            pt_lst[i] = controyIP(pt_lst[i]);
+            // 将处理后的分组添加到结果数组中
+            res.push(pt_lst[i]);
+        }
+        // 将所有处理后的分组连接成一个字符串
+        let finalResult = res.join('');
+        finalResult = cipherTextTransfer(finalResult, form);
+        document.getElementById("output").value = finalResult;
+        return finalResult;
+    }
+    // 定义一个名为encryptMessage的函数，用于加密消息
+    function encryptMessage() {
+        event.preventDefault(); // 阻止表单的默认提交行为
+        var form = document.getElementById('form-select').value; // 获取表单类型
+        var message = document.getElementById("message").value; // 获取消息内容
+        var key = document.getElementById("key").value; // 获取密钥
+        if (form === 'Binary' && !isValidBinaryMessage(message)) { // 如果表单类型是Binary且消息无效
+            alert("分组格式错误! 请重新输入！"); // 弹出消息提示
+            return; // 终止函数执行
+        }
+
+        if (!isValidKey(key)) { // 如果密钥无效
+            alert("密钥格式错误! 请重新输入！"); // 弹出消息提示
+            return; // 终止函数执行
+        }
+        // 调用encryptMessage函数处理消息
+        encryptORdecryptMessage(form,message,key,0);
+    }
+
+    // 定义一个名为decryptMessage的函数，用于解密消息
+    function decryptMessage() {
+        event.preventDefault(); // 阻止表单的默认提交行为
+        var form = document.getElementById('form-select').value; // 获取表单类型
+        var message = document.getElementById("message").value; // 获取消息内容
+        var key = document.getElementById("key").value; // 获取密钥
+        if (form === 'Binary' && !isValidBinaryMessage(message)) { // 如果表单类型是Binary且消息无效
+            alert("分组格式错误! 请重新输入！"); // 弹出消息提示
+            return; // 终止函数执行
+        }
+
+        if (!isValidKey(key)) { // 如果密钥无效
+            alert("密钥格式错误! 请重新输入！"); // 弹出消息提示
+            return; // 终止函数执行
+        }
+        // 调用encryptMessage函数处理消息
+        encryptORdecryptMessage(form,message,key,1);
+    }
+ 
+    function plainTextTransfer(plaintext, form) {
+        // 判断明文格式是否为二进制字符串
+        if (form === 'Binary') {
+            return plaintext;
+        } else {
+            let res = "";
+            // 遍历每个字符并转换为其二进制形式
+            for (let i = 0; i < plaintext.length; i++) {
+                res += plaintext.charCodeAt(i).toString(2).padStart(8, '0');
+            }
+            return res;
+        }
+    }
+    // 定义一个在ASCII情况下把密文转为ASCII码字符串的函数
+    function cipherTextTransfer(ciphertext, form) {
+        // 判断密文格式是否为二进制字符串
+        if (form === 'Binary') {
+            return ciphertext;
+        } else {
+            let res = "";
+            // 按照8位分组进行遍历并转换为其ASCII字符
+            for (let i = 0; i < ciphertext.length; i+=8) {
+                res += String.fromCharCode(parseInt(ciphertext.substring(i, i + 8), 2));
+            }
+            return res;
+        }
+    }
+
+    function split(plaintext) {
+        // 初始化分组列表: 用于存储每一个8-bit子串
+        let pt_lst = [];
+        let length = plaintext.length;  // 计算明文的长度
+
+        if (length % 8 === 0) {  // 判断明文长度是否是8的倍数
+            for (let i = 0; i < length; i+=8) {  // 如果是，则直接分组
+                pt_lst.push(plaintext.substring(i, i+8));
+            }
+        } else {
+            for (let i = 0; i < length - 8; i+=8) {  // 如果不是，则除了最后一个分组，其他都直接分组
+                pt_lst.push(plaintext.substring(i, i+8));
+            }
+            let rest = length % 8;  // 计算最后一个分组中实际字符的个数
+            // 对最后一个分组进行处理，不足的部分用'0'进行补齐
+            pt_lst.push('0'.repeat(8 - rest) + plaintext.substring(length - rest));
+        }
+        return pt_lst;  // 返回分组列表
+    }
+
+    // 验证消息是否是有效的Binary消息，长度必须是8的整数倍且只包含0和1
+    function isValidBinaryMessage(message) {
+        if (message.length % 8 !== 0 || !/^[01]+$/.test(message)) {
+            return false;
+        }
+        return true;
+    }
+    
+    // 验证密钥是否是有效的Binary(10-bit)字符串
+    function isValidKey(key) {
+        if (key.length !== 10 || !/^[01]+$/.test(key)) {
+            return false;
+        }
+        return true;
+    }
+
+    function filterDecrypt(form, plaintext, ciphertext) {
+        var validKeys = [];  // 存储所有有效的密钥
+        let keysToRemove = [];
+        for (let i = 0; i < plaintext.length; i++){
+            if (i === 0) {
+                // 对于第一个明文密文对，尝试所有可能的密钥
+                for (let key = 0; key < 1024; key++) {
+                    let binaryKey = key.toString(2).padStart(10, '0');  // 将密钥转换为二进制字符串，保留前导零
+                    let decryptedText = encryptORdecryptMessage(form ,ciphertext[i], binaryKey, 1);  // 使用密钥解密密文
+                    document.getElementById("output").value = "";
+                    if (decryptedText === plaintext[i]) {
+                        validKeys.push(binaryKey); // 如果解密后的文本与明文匹配，则将密钥添加到有效密钥列表中
+                    }
+                }
+            } else {
+                // 对于后续的明文密文对，仅考虑之前已经通过验证的密钥
+                validKeys = validKeys.filter(key => {
+                    let decryptedText = encryptORdecryptMessage(form ,ciphertext[i], key, 1); // 使用已验证的密钥解密密文
+                    document.getElementById("output").value = "";
+                    return decryptedText === plaintext[i];  // 只保留解密后文本与明文匹配的密钥
+                });
+            }
+        }
+        return validKeys;
+    }
+
+    function bruteForceDecrypt() {
+        let plaintexts = document.getElementById("plaintexts").value.split("\n");  // 获取明文列表并按行分割
+        let ciphertexts = document.getElementById("ciphertexts").value.split("\n");  // 获取密文列表并按行分割  
+        if (plaintexts.length !== ciphertexts.length) {
+            alert("明文和密文的数量不匹配!");
+            return;
+        }
+        let form = document.getElementById("form-select").value;  // 获取form的值
+
+        let validKeys;
+        validKeys = filterDecrypt(form, plaintexts, ciphertexts);
+        // 显示有效密钥列表
+        document.getElementById("validKeysOutput").value = validKeys.join("\n");
+    }
+
+
+    function refresh() {
+        // 清空消息内容输入框
+        document.getElementById("message").value = "";
+        // 清空密钥输入框
+        document.getElementById("key").value = "";
+        // 清空输出输入框（如果需要）
+        document.getElementById("output").value = "";
+        document.getElementById("plaintexts").value= "";  
+        document.getElementById("ciphertexts").value= ""; 
+        document.getElementById("validKeysOutput").value= "";
+    }
+
+</script>
+
+
+
+<body>
+    <h1>S-DES Encryption & Decryption</h1>
+    
+    <div class="form-container">
+        <div class="form-row">
+            <label for="type">select:</label>
+            <select title="Select the input information form:" name="form" id="form-select">
+                <option value="Binary" selected>Binary</option>
+                <option value="ASCII">ASCII</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label for="message">Message:</label>
+            <input type="text" id="message" placeholder="Enter your message" autocomplete="off">
+        </div>
+        <div class="form-row">
+            <label for="key">Key:</label>
+            <input type="text" id="key" placeholder="Enter your 10-bit key" autocomplete="off">
+        </div>
+        <!-- 修改明文输入框 -->
+        <div class="form-row">
+            <label for="plaintexts">Plaintexts:</label>
+            <textarea id="plaintexts" rows="4" style="overflow-y: auto; max-height: 30px;" placeholder="Enter each plaintext on a new line"></textarea>
+        </div>
+        <!-- 修改密文输入框 -->
+        <div class="form-row">
+            <label for="ciphertexts">Ciphertexts:</label>
+            <textarea id="ciphertexts" rows="4" style="overflow-y: auto; max-height: 30px;" placeholder="Enter each ciphertext on a new line"></textarea>
+        </div>
+        <div class="buttons-container">
+            <button id="Encrypt" onclick="encryptMessage()">Encrypt</button>
+            <button id="Decrypt" onclick="decryptMessage()">Decrypt</button>
+            <button id="Refresh" onclick="refresh()">Refresh</button>
+            <button id="BruteForce" onclick="bruteForceDecrypt()">BruteForceDecrypt</button>
+        </div>
+    
+        <div class="form-row" id="iframeContainer">
+            <label for="output">Output:</label>
+            <input type="text" id="output" autocomplete="off">
+        </div>
+        <div class="form-row">
+            <label for="validKeysOutput">Valid Keys:</label>
+            <textarea id="validKeysOutput" rows="4" style="overflow-y: auto; max-height: 80px;" readonly></textarea>
+        </div>
+    </div>
+
+</body>
+</html>
